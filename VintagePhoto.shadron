@@ -1,0 +1,57 @@
+#include<perlin>
+
+// Parameters
+param float vignetteSize = 0.85: range(0.0, 2.0);
+param float vignetteEdge = 0.60: range(0.0, 5.0);
+
+param vec3 sepiaColor = vec3(1.12, 0.95, 0.72): range(vec3(0, 0, 0), vec3(2, 2, 2));
+param float sepiaIntensity = 0.50;
+
+param float dirtVariationA = 0.31: range(0.01, 1.0);
+param float dirtVariationB = 0.54: range(0.01, 1.0);
+param float dirtVariationC = 0.29: range(0.0, 1.0);
+param float dirtScale = 0.14: range(0.01, 2.0);
+param float dirtBrightness = 14.0: range(1.0, 50.0);
+
+// Constants
+const vec2 CENTER = vec2(0.5, 0.5);
+const vec3 LUMINANCE_WEIGHT = vec3(0.2126, 0.7152, 0.0722);
+
+template<image, dirtImage>
+glsl vec4 oldStyle(vec2 pos) {
+	vec4 src = texture(image, pos);
+	vec3 col = src.rgb;
+
+	// Vignette
+	float d = distance(CENTER, pos);
+	float vignette = smoothstep(vignetteSize, vignetteSize - vignetteEdge, d);
+	col *= vignette;
+
+	// Luminance
+	float lum = dot(col, LUMINANCE_WEIGHT);
+	col = vec3(lum, lum, lum);
+
+	// Sepia
+	vec3 sepia = col * sepiaColor;
+	col = mix(col, sepia, sepiaIntensity);
+
+	// Random brightness variations (dirt etc.)
+	vec3 dirt = texture(dirtImage, pos).rgb;
+	col *= dirt;
+
+
+
+	return vec4(col, src.a);
+}
+
+glsl vec4 generateDirt(vec2 pos) {
+	vec2 offset = vec2(dirtVariationA, dirtVariationB);
+	float noise = perlinNoise(pos * 1/dirtScale, offset, dirtVariationC) * 0.5 + 0.5;
+	noise = pow(noise, 1.0 / dirtBrightness);
+	return vec4(noise, noise, noise, 1.0);
+}
+
+// Images
+image Input = file();
+image Dirt = glsl(generateDirt, sizeof(Input));
+image Output = glsl(oldStyle<Input, Dirt>, sizeof(Input));
